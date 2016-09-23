@@ -8,6 +8,13 @@
 
 #import "TableViewController.h"
 
+
+typedef enum{
+    ViewControllerSizeOfFileByte = 1,
+    ViewControllerSizeOfFileKByte = 1024,
+    ViewControllerSizeOfFileMByte = 1048576,
+    ViewControllerSizeOfFileGByte = 1073741824
+}ViewControllerSizeOfFileType;
 @interface TableViewController ()
 
 @property(strong,nonatomic) NSString *path;
@@ -142,21 +149,45 @@
 
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    static NSString *identifierCell = @"Cell";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifierCell];
-    if(!cell)
-    {
-        cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleDefault reuseIdentifier:identifierCell];
-    }
-    
+   
+    static NSString *identifierCellFile = @"CellFile";
+    static NSString *identifierCellDirectory = @"CellDirectory";
+    UITableViewCell *cell;
     NSString *fileName = [self.content objectAtIndex:indexPath.row];
-    cell.textLabel.text = fileName;
     if([self isDirectoryAtIndexPath:indexPath])
     {
+        cell = [tableView dequeueReusableCellWithIdentifier:identifierCellDirectory];
+        if(!cell)
+        {
+            cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:identifierCellDirectory];
+        }
         cell.imageView.image = [UIImage imageNamed:@"folder.png"];
-    }else{
-        cell.imageView.image = [UIImage imageNamed:@"file.png"];
+        NSString *path = [self.path stringByAppendingPathComponent:fileName];
+        NSError *error = nil;
+        NSArray<NSString*> *arrayFileNames = [[NSFileManager defaultManager]contentsOfDirectoryAtPath:path error:&error];
+        if(error)
+        {
+            NSLog(@"ошибка %@",[error localizedDescription]);
+        }
+        cell.detailTextLabel.text  = [self sizeOfDirectory:path withArrayFileName:arrayFileNames];
     }
+    else{
+        cell = [tableView dequeueReusableCellWithIdentifier:identifierCellDirectory];
+        if(!cell)
+        {
+            cell = [[UITableViewCell alloc]initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:identifierCellFile];
+        }
+        cell.imageView.image = [UIImage imageNamed:@"file.png"];
+        cell.detailTextLabel.text  = [self sizeOfFile:fileName];
+    }
+    cell.detailTextLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    cell.textLabel.frame = CGRectMake(CGPointZero.x,CGPointZero.y,(CGRectGetWidth(cell.bounds) /4), CGRectGetHeight(cell.bounds));
+    cell.textLabel.text = fileName;
+    cell.textLabel.adjustsFontSizeToFitWidth = YES;
+    cell.textLabel.minimumScaleFactor = 1.f;
+    //cell.textLabel
+    cell.textLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+
     return cell;
 }
 
@@ -251,6 +282,86 @@
     NSString *filePath = [self.path stringByAppendingPathComponent:fileName];
     [[NSFileManager defaultManager] fileExistsAtPath:filePath isDirectory:&isDirectory];
     return isDirectory;
+}
+
+-(BOOL)isDirectoryPath:(NSString*)path{
+    
+    BOOL isDirectory = NO;
+    [[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDirectory];
+    return isDirectory;
+}
+
+-(NSString*)sizeOfFile:(NSString*)fileName{
+    NSString *path = [self.path stringByAppendingPathComponent:fileName];
+    NSError *error = nil;
+    NSDictionary<NSString *, id> *atributesDict = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:&error];
+    if(error)
+    {
+        NSLog(@"%@",[error localizedDescription]);
+    }
+    NSInteger size = [[atributesDict objectForKey:NSFileSize] integerValue];
+    return [self invertInMetricalStr:size];
+}
+
+-(NSString*)sizeOfDirectory:(NSString*)pathDir withArrayFileName:(NSArray*)fileNames{
+    NSInteger allSizeFiles = [self countOfFilesAtDirectory:pathDir withArray:fileNames withIndexOfFile:0];
+    return [self invertInMetricalStr:allSizeFiles];
+
+}
+
+-(NSInteger)countOfFilesAtDirectory:(NSString*)pathDir withArray:(NSArray*)fileNames withIndexOfFile:(NSInteger)indexOfFile{
+    NSInteger fileSize  = 0;
+    if(indexOfFile <= [fileNames count] - 1)
+    {
+        NSString *path = [pathDir stringByAppendingPathComponent:[fileNames objectAtIndex:indexOfFile]];
+        if([self isDirectoryPath:path])
+        {
+            NSArray<NSString*> *currentFileNames = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:path error:nil];
+            fileSize += [self countOfFilesAtDirectory:path withArray:currentFileNames withIndexOfFile:0];
+        }
+        NSError *error = nil;
+        NSDictionary<NSString *, id> *atributesDict = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:&error];
+        if(error)
+        {
+            NSLog(@"%@",[error localizedDescription]);
+        }
+        NSInteger currentIndexOfFile = indexOfFile + 1;
+        fileSize += [[atributesDict objectForKey:NSFileSize] integerValue];
+        fileSize += [self countOfFilesAtDirectory:pathDir withArray:fileNames withIndexOfFile:currentIndexOfFile];
+    }
+    return fileSize;
+}
+
+-(NSString*)invertInMetricalStr:(NSInteger)size{
+    NSString *sizeOfFileStr;
+    CGFloat sizeOfFile;
+    if(size / ViewControllerSizeOfFileGByte != 0)
+    {
+        sizeOfFile = size / (CGFloat)ViewControllerSizeOfFileGByte;
+        sizeOfFileStr = [NSString stringWithFormat:@"%1.2f GB",sizeOfFile];
+        
+    }else if(size / ViewControllerSizeOfFileMByte !=0){
+        
+        sizeOfFile = size / (CGFloat)ViewControllerSizeOfFileMByte;
+        sizeOfFileStr = [NSString stringWithFormat:@"%1.2f MB",sizeOfFile];
+        
+    }else if(size / ViewControllerSizeOfFileKByte !=0){
+        
+        sizeOfFile = size / (CGFloat)ViewControllerSizeOfFileKByte;
+        sizeOfFileStr = [NSString stringWithFormat:@"%1.2f KB",sizeOfFile];
+        
+    }else if(size / ViewControllerSizeOfFileByte !=0){
+        
+        sizeOfFile = size / (CGFloat)ViewControllerSizeOfFileByte;
+        sizeOfFileStr = [NSString stringWithFormat:@"%ld B",(long)size];
+        sizeOfFile = size;
+    
+    }
+    else
+    {
+        sizeOfFileStr = @"размер < 1 байта";
+    }
+    return sizeOfFileStr;
 }
 
 @end
